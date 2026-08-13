@@ -370,11 +370,16 @@ async function fetchStreamUrl(
     dataNume: string,
 ): Promise<string | null> {
     try {
+        console.log(`Fetching stream for post=${dataPost}, nume=${dataNume}`);
+        
         const formData = new URLSearchParams();
         formData.append("action", "doo_player_ajax");
         formData.append("post", dataPost);
         formData.append("nume", dataNume);
         formData.append("type", "movie");
+
+        console.log(`POST to: ${BASE_URL}/wp-admin/admin-ajax.php`);
+        console.log(`FormData: ${formData.toString()}`);
 
         const { data } = await axios.post(
             `${BASE_URL}/wp-admin/admin-ajax.php`,
@@ -382,20 +387,26 @@ async function fetchStreamUrl(
             {
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    Referer: BASE_URL,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": `${BASE_URL}/`,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Origin": BASE_URL,
                 },
+                timeout: 10000,
             },
         );
 
+        console.log(`Response for nume ${dataNume}:`, JSON.stringify(data).substring(0, 200));
+
         if (data && data.embed_url) {
+            console.log(`✓ Found embed_url for nume ${dataNume}: ${data.embed_url}`);
             return data.embed_url;
         }
 
+        console.log(`✗ No embed_url in response for nume ${dataNume}`);
         return null;
-    } catch (error) {
-        console.error("Error fetching stream URL:", error);
+    } catch (error: any) {
+        console.error(`Error fetching stream URL for nume ${dataNume}:`, error.message);
         return null;
     }
 }
