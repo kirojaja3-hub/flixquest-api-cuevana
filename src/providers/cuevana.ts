@@ -285,11 +285,32 @@ async function getPlayerOptions(
 
             console.log(`Direct scraping player page HTML (${data.length} chars)`);
             
-            // Extract data-post from the page source (it's in the HTML, just not in OptUl yet)
-            const postIdMatch = data.match(/data-post[=\s]*["']?(\d+)["']?/i);
-            const postId = postIdMatch ? postIdMatch[1] : null;
+            // Debug: print more of the HTML to find the pattern
+            console.log(`=== HTML SAMPLE (first 5000 chars) ===`);
+            console.log(data.substring(0, 5000));
+            console.log(`=== END HTML SAMPLE ===`);
             
-            console.log(`Found post ID: ${postId}`);
+            // Extract data-post from the page source (it's in the HTML, just not in OptUl yet)
+            // Try multiple patterns
+            let postId = null;
+            
+            // Pattern 1: data-post="12345"
+            let match = data.match(/data-post\s*=\s*["'](\d+)["']/i);
+            if (match) postId = match[1];
+            
+            // Pattern 2: post: 12345 in JavaScript
+            if (!postId) {
+                match = data.match(/post\s*:\s*["']?(\d+)["']?/i);
+                if (match) postId = match[1];
+            }
+            
+            // Pattern 3: Look for post ID in URL path (/5281/joker -> 5281)
+            if (!postId) {
+                match = pageUrl.match(/\/(\d+)\//);
+                if (match) postId = match[1];
+            }
+            
+            console.log(`Found post ID: ${postId} (method: ${match ? 'regex' : 'none'})`);
             
             if (!postId) {
                 console.log("Could not find post ID in page");
