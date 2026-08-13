@@ -259,7 +259,8 @@ export async function getCuevanaEpisodeUrl(
 }
 
 /**
- * Extract player options using direct scraping with anti-bot headers
+ * Extract player options by parsing embedded data from the page
+ * Cuevana embeds player data in JavaScript variables
  */
 async function getPlayerOptions(
     pageUrl: string,
@@ -267,114 +268,73 @@ async function getPlayerOptions(
     try {
         console.log("Fetching player options...");
         
-        // Try direct scraping first
+        // Ensure absolute URL
+        const absoluteUrl = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
+        
+        // Try direct scraping to get embedded data
         try {
-            // Ensure absolute URL
-            const absoluteUrl = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
-            
             const { data } = await axios.get(absoluteUrl, {
                 headers: {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-                    "Accept-Encoding": "gzip, deflate, br",
-                    "Connection": "keep-alive",
                     "Referer": BASE_URL,
-                    "Upgrade-Insecure-Requests": "1",
-                    "Sec-Fetch-Dest": "document",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Site": "same-origin",
                 },
                 timeout: 15000,
             });
 
             console.log(`Direct scraping player page HTML (${data.length} chars)`);
             
-            // Debug: see what player-related elements exist
-            const $ = cheerio.load(data);
-            console.log(`=== PLAYER DEBUG ===`);
-            console.log(`#OptUl elements: ${$("#OptUl").length}`);
-            console.log(`#OptUl li elements: ${$("#OptUl li").length}`);
-            console.log(`li elements with data-post: ${$("li[data-post]").length}`);
-            console.log(`All li elements: ${$("li").length}`);
-            console.log(`Elements with class Opt: ${$(".Opt").length}`);
-            console.log(`Elements with class player: ${$(".player").length}`);
+            // Extract data-post from the page source (it's in the HTML, just not in OptUl yet)
+            const postIdMatch = data.match(/data-post[=\s]*["']?(\d+)["']?/i);
+            const postId = postIdMatch ? postIdMatch[1] : null;
             
-            // Try to find any player option structure
-            const possibleSelectors = [
-                "#OptUl li",
-                ".OptUl li", 
-                "li[data-post]",
-                ".player-option",
-                "[data-nume]",
-                "#playeroptionsul li"
-            ];
+            console.log(`Found post ID: ${postId}`);
             
-            let foundSelector = null;
-            const options: PlayerOption[] = [];
-
-            for (const selector of possibleSelectors) {
-                const found = $(selector);
-                console.log(`Trying selector "${selector}": ${found.length} elements`);
-                
-                if (found.length > 0) {
-                    found.each((_, li) => {
-                        const $li = $(li);
-                        const title = $li.find(".title").text().trim() || $li.text().trim() || "";
-                        const dataPost = $li.attr("data-post") || "";
-                        const dataNume = $li.attr("data-nume") || "";
-
-                        console.log(`  - Element: title="${title}", data-post="${dataPost}", data-nume="${dataNume}"`);
-
-                        if (dataPost && dataNume && dataPost !== "undefined") {
-                            options.push({ title, dataPost, dataNume });
-                        }
-                    });
-                    
-                    if (options.length > 0) {
-                        foundSelector = selector;
-                        console.log(`✓ Found ${options.length} options with selector: ${selector}`);
-                        break;
-                    }
-                }
+            if (!postId) {
+                console.log("Could not find post ID in page");
+                return null;
             }
-
-            console.log(`Extracted ${options.length} player options`);
+            
+            // Get all available player options from Cuevana's internal structure
+            // Look for the player tabs data
+            const options: PlayerOption[] = [];
+            
+            // Try to find player option numbers (they usually go from 1 to 5+)
+            // Pattern: data-nume="1", data-nume="2", etc.
+            const numeMatches = data.matchAll(/data-nume[=\s]*["']?(\d+)["']?/gi);
+            const numeSet = new Set<string>();
+            
+            for (const match of numeMatches) {
+                numeSet.add(match[1]);
+            }
+            
+            console.log(`Found ${numeSet.size} unique nume values:`, Array.from(numeSet));
+            
+            // Create options for each nume (language option)
+            // We'll try common ones and any we found
+            const allNumes = new Set([...Array.from(numeSet), "1", "2", "3", "4", "5"]);
+            
+            for (const nume of allNumes) {
+                // We'll label them generically since we don't know language yet
+                options.push({
+                    title: `Opción ${nume}`,
+                    dataPost: postId,
+                    dataNume: nume,
+                });
+            }
+            
+            console.log(`Created ${options.length} player options to test`);
+            
             if (options.length > 0) {
                 return options;
             }
+            
         } catch (directError: any) {
-            console.log(`Direct scraping player options failed: ${directError.message}`);
-            console.log(`Trying ScraperAPI fallback...`);
+            console.log(`Error fetching player page: ${directError.message}`);
         }
         
-        // Fallback to ScraperAPI
-        // Ensure absolute URL
-        const absoluteUrl = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(absoluteUrl)}&render=true`;
-        
-        console.log(`ScraperAPI fallback for player options...`);
-        const { data } = await axios.get(scraperUrl, {
-            timeout: 60000,
-        });
-
-        console.log(`ScraperAPI player page HTML (${data.length} chars)`);
-        const $ = cheerio.load(data);
-        const options: PlayerOption[] = [];
-
-        $("#OptUl li").each((_, li) => {
-            const $li = $(li);
-            const title = $li.find(".title").text().trim() || "";
-            const dataPost = $li.attr("data-post") || "";
-            const dataNume = $li.attr("data-nume") || "";
-
-            if (dataPost && dataNume && dataPost !== "undefined") {
-                options.push({ title, dataPost, dataNume });
-            }
-        });
-
-        console.log(`Extracted ${options.length} player options`);
-        return options.length > 0 ? options : null;
+        return null;
     } catch (error) {
         console.error("Error extracting player options:", error);
         return null;
