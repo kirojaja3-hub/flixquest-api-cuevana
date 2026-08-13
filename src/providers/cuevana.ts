@@ -18,51 +18,73 @@ interface PlayerOption {
 }
 
 /**
- * Search for a movie or TV show on Cuevana
+ * Search for a movie or TV show on Cuevana using Playwright (to bypass Cloudflare)
  */
 export async function searchCuevana(
     title: string,
     year?: number,
     type: "movie" | "tv" = "movie",
 ): Promise<string | null> {
+    let browser;
     try {
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
         console.log(`Fetching search results from: ${searchUrl}`);
         
-        const { data } = await axios.get(searchUrl, {
-            headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            },
+        // Use Playwright to bypass Cloudflare
+        browser = await chromium.launch({
+            headless: true,
+            executablePath: await chromeLauncher.executablePath,
+            args: chromeLauncher.args,
         });
 
-        const $ = cheerio.load(data);
-        const results: any[] = [];
-
-        // Updated selector - Cuevana uses article.TPost.Movie or article.TPost.Tvshows
-        $("article.TPost").each((_, element) => {
-            const $el = $(element);
-            // The link is in the <a> tag inside the <div class="Image">
-            const link = $el.find("div.Image a").attr("href") || $el.find("a").first().attr("href");
-            // Title is in <h2 class="Title">
-            const titleText = $el.find("h2.Title, .Title").text().trim();
-            // Year is in span.Year or similar
-            const yearText = $el.find(".Year, span.Year").text().trim();
-            const yearMatch = yearText.match(/\d{4}/);
-            const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
-
-            console.log(`Found: "${titleText}" (${itemYear}) -> ${link}`);
-
-            if (link && titleText) {
-                results.push({
-                    title: titleText,
-                    year: itemYear,
-                    url: link,
-                });
-            }
+        const context = await browser.newContext({
+            userAgent:
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         });
+        const page = await context.newPage();
+
+        await page.goto(searchUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+        });
+
+        // Wait for results to load
+        await page.waitForTimeout(2000);
+
+        // Extract search results
+        const results = await page.evaluate(() => {
+            const items: any[] = [];
+            const articles = document.querySelectorAll("article.TPost");
+
+            articles.forEach((article) => {
+                const link =
+                    article.querySelector("div.Image a")?.getAttribute("href") ||
+                    article.querySelector("a")?.getAttribute("href");
+                const titleEl = article.querySelector("h2.Title, .Title");
+                const titleText = titleEl?.textContent?.trim() || "";
+                const yearEl = article.querySelector(".Year, span.Year");
+                const yearText = yearEl?.textContent?.trim() || "";
+                const yearMatch = yearText.match(/\d{4}/);
+                const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
+
+                if (link && titleText) {
+                    items.push({
+                        title: titleText,
+                        year: itemYear,
+                        url: link,
+                    });
+                }
+            });
+
+            return items;
+        });
+
+        await browser.close();
 
         console.log(`Total results found: ${results.length}`);
+        results.forEach((r) => {
+            console.log(`Found: "${r.title}" (${r.year}) -> ${r.url}`);
+        });
 
         if (results.length === 0) {
             console.log("No results found in search");
@@ -100,6 +122,13 @@ export async function searchCuevana(
         return results.length > 0 ? results[0].url : null;
     } catch (error) {
         console.error("Error searching Cuevana:", error);
+        if (browser) {
+            try {
+                await browser.close();
+            } catch (e) {
+                console.error("Error closing browser:", e);
+            }
+        }
         return null;
     }
 }
