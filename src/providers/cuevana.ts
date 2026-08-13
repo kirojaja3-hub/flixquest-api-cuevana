@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import chromeLauncher from "chrome-aws-lambda";
 import axios from "axios";
 import * as cheerio from "cheerio";
 
@@ -123,18 +124,13 @@ async function getPlayerOptions(
 ): Promise<PlayerOption[] | null> {
     let browser;
     try {
-        console.log("Launching browser...");
+        console.log("Launching browser with chrome-aws-lambda...");
+        
+        // Use chrome-aws-lambda for Render compatibility
         browser = await chromium.launch({
             headless: true,
-            args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-features=IsolateOrigins,site-per-process",
-                "--disable-blink-features=AutomationControlled",
-                "--single-process",
-            ],
+            executablePath: await chromeLauncher.executablePath,
+            args: chromeLauncher.args,
         });
 
         console.log("Creating new page...");
