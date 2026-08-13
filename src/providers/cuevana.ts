@@ -33,7 +33,7 @@ export async function searchCuevana(
         // Use Playwright to bypass Cloudflare
         browser = await chromium.launch({
             headless: true,
-            executablePath: await chromeLauncher.executablePath,
+            executablePath: await chromeLauncher.executablePath(),
             args: chromeLauncher.args,
         });
 
