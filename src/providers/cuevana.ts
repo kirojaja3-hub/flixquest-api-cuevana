@@ -1,4 +1,4 @@
-import puppeteer from "puppeteer";
+import { chromium } from "playwright-core";
 import axios from "axios";
 import * as cheerio from "cheerio";
 
@@ -116,36 +116,45 @@ export async function getCuevanaEpisodeUrl(
 }
 
 /**
- * Extract player options using Puppeteer (JavaScript execution required)
+ * Extract player options using Playwright (JavaScript execution required)
  */
 async function getPlayerOptions(
     pageUrl: string,
 ): Promise<PlayerOption[] | null> {
     let browser;
     try {
-        browser = await puppeteer.launch({
+        console.log("Launching browser...");
+        browser = await chromium.launch({
             headless: true,
             args: [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-blink-features=AutomationControlled",
+                "--single-process",
             ],
         });
 
-        const page = await browser.newPage();
-        await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        );
+        console.log("Creating new page...");
+        const context = await browser.newContext({
+            userAgent:
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        });
+        const page = await context.newPage();
 
+        console.log(`Navigating to: ${pageUrl}`);
         await page.goto(pageUrl, {
-            waitUntil: "networkidle2",
+            waitUntil: "domcontentloaded",
             timeout: 30000,
         });
 
+        console.log("Waiting for player options...");
         // Wait for player options to load
-        await page.waitForSelector("#OptUl li", { timeout: 10000 });
+        await page.waitForSelector("#OptUl li", { timeout: 15000 });
 
+        console.log("Extracting player options...");
         // Extract player options
         const options = await page.evaluate(() => {
             const items: PlayerOption[] = [];
@@ -166,10 +175,17 @@ async function getPlayerOptions(
         });
 
         await browser.close();
+        console.log(`Extracted ${options.length} player options`);
         return options.length > 0 ? options : null;
     } catch (error) {
         console.error("Error extracting player options:", error);
-        if (browser) await browser.close();
+        if (browser) {
+            try {
+                await browser.close();
+            } catch (e) {
+                console.error("Error closing browser:", e);
+            }
+        }
         return null;
     }
 }
