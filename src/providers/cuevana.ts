@@ -18,7 +18,7 @@ interface PlayerOption {
 }
 
 /**
- * Search for a movie or TV show on Cuevana using ScraperAPI
+ * Search for a movie or TV show on Cuevana using direct scraping with anti-bot headers
  */
 export async function searchCuevana(
     title: string,
@@ -29,79 +29,162 @@ export async function searchCuevana(
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
         console.log(`Fetching search results from: ${searchUrl}`);
         
-        // Use ScraperAPI with JavaScript rendering + residential proxy for better Cloudflare bypass
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true&premium=true&country_code=us`;
-        
-        console.log(`ScraperAPI request for: ${searchUrl}`);
-        
-        const { data } = await axios.get(scraperUrl, {
-            timeout: 90000,
-        });
-        
-        // Debug: log first 1000 chars of HTML
-        console.log(`HTML received (${data.length} chars). Preview: ${data.substring(0, 1000)}`);
+        // Try direct scraping first with anti-bot headers
+        try {
+            const { data } = await axios.get(searchUrl, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Cache-Control": "max-age=0",
+                },
+                timeout: 15000,
+            });
+            
+            console.log(`Direct scraping HTML received (${data.length} chars)`);
+            
+            const $ = cheerio.load(data);
+            const results: any[] = [];
 
-        const $ = cheerio.load(data);
-        const results: any[] = [];
+            $("article.TPost").each((_, article) => {
+                const $article = $(article);
+                const link =
+                    $article.find("div.Image a").attr("href") ||
+                    $article.find("a").attr("href");
+                const titleText = $article.find("h2.Title, .Title").text().trim();
+                const yearText = $article.find(".Year, span.Year").text().trim();
+                const yearMatch = yearText.match(/\d{4}/);
+                const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
 
-        $("article.TPost").each((_, article) => {
-            const $article = $(article);
-            const link =
-                $article.find("div.Image a").attr("href") ||
-                $article.find("a").attr("href");
-            const titleText = $article.find("h2.Title, .Title").text().trim();
-            const yearText = $article.find(".Year, span.Year").text().trim();
-            const yearMatch = yearText.match(/\d{4}/);
-            const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
+                if (link && titleText) {
+                    results.push({
+                        title: titleText,
+                        year: itemYear,
+                        url: link,
+                    });
+                }
+            });
 
-            if (link && titleText) {
-                results.push({
-                    title: titleText,
-                    year: itemYear,
-                    url: link,
+            console.log(`Total results found: ${results.length}`);
+            
+            if (results.length > 0) {
+                results.forEach((r) => {
+                    console.log(`Found: "${r.title}" (${r.year}) -> ${r.url}`);
                 });
+
+                // Find best match
+                const normalizedTitle = title.toLowerCase().trim();
+                for (const result of results) {
+                    const normalizedResultTitle = result.title.toLowerCase().trim();
+                    const cleanTitle = normalizedResultTitle.replace(/\s*\(\d{4}\)\s*/g, "").trim();
+                    
+                    console.log(`Comparing: "${normalizedTitle}" with "${cleanTitle}"`);
+                    
+                    if (
+                        cleanTitle.includes(normalizedTitle) ||
+                        normalizedTitle.includes(cleanTitle)
+                    ) {
+                        if (year) {
+                            if (result.year === year) {
+                                console.log(`✓ Match found: ${result.url}`);
+                                return result.url;
+                            }
+                        } else {
+                            console.log(`✓ Match found (no year check): ${result.url}`);
+                            return result.url;
+                        }
+                    }
+                }
+
+                // Fallback: return first result
+                console.log(`No exact match, returning first result: ${results[0].url}`);
+                return results[0].url;
             }
-        });
-
-        console.log(`Total results found: ${results.length}`);
-        results.forEach((r) => {
-            console.log(`Found: "${r.title}" (${r.year}) -> ${r.url}`);
-        });
-
-        if (results.length === 0) {
-            console.log("No results found in search");
-            return null;
+        } catch (directError: any) {
+            console.log(`Direct scraping failed: ${directError.message}`);
+            console.log(`Trying with ScraperAPI fallback...`);
         }
+        
+        // Fallback to ScraperAPI (simple mode, no premium)
+        try {
+            const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true`;
+            
+            console.log(`ScraperAPI fallback request...`);
+            const { data } = await axios.get(scraperUrl, {
+                timeout: 60000,
+            });
+            
+            console.log(`ScraperAPI HTML received (${data.length} chars)`);
+            
+            const $ = cheerio.load(data);
+            const results: any[] = [];
 
-        // Find best match
-        const normalizedTitle = title.toLowerCase().trim();
-        for (const result of results) {
-            const normalizedResultTitle = result.title.toLowerCase().trim();
-            
-            // Remove year from title if present
-            const cleanTitle = normalizedResultTitle.replace(/\s*\(\d{4}\)\s*/g, "").trim();
-            
-            console.log(`Comparing: "${normalizedTitle}" with "${cleanTitle}"`);
-            
-            if (
-                cleanTitle.includes(normalizedTitle) ||
-                normalizedTitle.includes(cleanTitle)
-            ) {
-                if (year) {
-                    if (result.year === year) {
-                        console.log(`✓ Match found: ${result.url}`);
+            $("article.TPost").each((_, article) => {
+                const $article = $(article);
+                const link =
+                    $article.find("div.Image a").attr("href") ||
+                    $article.find("a").attr("href");
+                const titleText = $article.find("h2.Title, .Title").text().trim();
+                const yearText = $article.find(".Year, span.Year").text().trim();
+                const yearMatch = yearText.match(/\d{4}/);
+                const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
+
+                if (link && titleText) {
+                    results.push({
+                        title: titleText,
+                        year: itemYear,
+                        url: link,
+                    });
+                }
+            });
+
+            console.log(`Total results found: ${results.length}`);
+            results.forEach((r) => {
+                console.log(`Found: "${r.title}" (${r.year}) -> ${r.url}`);
+            });
+
+            if (results.length === 0) {
+                console.log("No results found in search");
+                return null;
+            }
+
+            // Find best match
+            const normalizedTitle = title.toLowerCase().trim();
+            for (const result of results) {
+                const normalizedResultTitle = result.title.toLowerCase().trim();
+                const cleanTitle = normalizedResultTitle.replace(/\s*\(\d{4}\)\s*/g, "").trim();
+                
+                console.log(`Comparing: "${normalizedTitle}" with "${cleanTitle}"`);
+                
+                if (
+                    cleanTitle.includes(normalizedTitle) ||
+                    normalizedTitle.includes(cleanTitle)
+                ) {
+                    if (year) {
+                        if (result.year === year) {
+                            console.log(`✓ Match found: ${result.url}`);
+                            return result.url;
+                        }
+                    } else {
+                        console.log(`✓ Match found (no year check): ${result.url}`);
                         return result.url;
                     }
-                } else {
-                    console.log(`✓ Match found (no year check): ${result.url}`);
-                    return result.url;
                 }
             }
-        }
 
-        // Fallback: return first result
-        console.log(`No exact match, returning first result: ${results[0].url}`);
-        return results.length > 0 ? results[0].url : null;
+            // Fallback: return first result
+            console.log(`No exact match, returning first result: ${results[0].url}`);
+            return results.length > 0 ? results[0].url : null;
+        } catch (scraperError: any) {
+            console.error(`ScraperAPI also failed: ${scraperError.message}`);
+            return null;
+        }
     } catch (error) {
         console.error("Error searching Cuevana:", error);
         return null;
@@ -146,26 +229,65 @@ export async function getCuevanaEpisodeUrl(
 }
 
 /**
- * Extract player options using ScraperAPI
+ * Extract player options using direct scraping with anti-bot headers
  */
 async function getPlayerOptions(
     pageUrl: string,
 ): Promise<PlayerOption[] | null> {
     try {
-        console.log("Fetching player options with ScraperAPI...");
+        console.log("Fetching player options...");
         
-        // Use ScraperAPI with JavaScript rendering + residential proxy
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true&premium=true&country_code=us`;
-        
-        console.log(`ScraperAPI request for player options: ${pageUrl}`);
-        const { data } = await axios.get(scraperUrl, {
-            timeout: 90000,
-        });
-        
-        // Debug: log HTML preview
-        console.log(`Player page HTML (${data.length} chars). Preview: ${data.substring(0, 1000)}`);
+        // Try direct scraping first
+        try {
+            const { data } = await axios.get(pageUrl, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Referer": BASE_URL,
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "same-origin",
+                },
+                timeout: 15000,
+            });
 
-        console.log("Extracting player options...");
+            console.log(`Direct scraping player page HTML (${data.length} chars)`);
+            const $ = cheerio.load(data);
+            const options: PlayerOption[] = [];
+
+            $("#OptUl li").each((_, li) => {
+                const $li = $(li);
+                const title = $li.find(".title").text().trim() || "";
+                const dataPost = $li.attr("data-post") || "";
+                const dataNume = $li.attr("data-nume") || "";
+
+                if (dataPost && dataNume && dataPost !== "undefined") {
+                    options.push({ title, dataPost, dataNume });
+                }
+            });
+
+            console.log(`Extracted ${options.length} player options`);
+            if (options.length > 0) {
+                return options;
+            }
+        } catch (directError: any) {
+            console.log(`Direct scraping player options failed: ${directError.message}`);
+            console.log(`Trying ScraperAPI fallback...`);
+        }
+        
+        // Fallback to ScraperAPI
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        
+        console.log(`ScraperAPI fallback for player options...`);
+        const { data } = await axios.get(scraperUrl, {
+            timeout: 60000,
+        });
+
+        console.log(`ScraperAPI player page HTML (${data.length} chars)`);
         const $ = cheerio.load(data);
         const options: PlayerOption[] = [];
 
@@ -294,8 +416,8 @@ export async function getCuevanaStreams(
             console.log(`Found episode at: ${pageUrl}`);
         }
 
-        // Step 3: Extract player options with ScraperAPI
-        console.log("Extracting player options with ScraperAPI...");
+        // Step 3: Extract player options (try direct scraping first, fallback to ScraperAPI)
+        console.log("Extracting player options...");
         const playerOptions = await getPlayerOptions(pageUrl);
         if (!playerOptions || playerOptions.length === 0) {
             console.log("No player options found");
