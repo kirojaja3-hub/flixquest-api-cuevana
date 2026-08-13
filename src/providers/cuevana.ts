@@ -472,6 +472,139 @@ function detectLanguage(title: string): string {
 }
 
 /**
+ * Extract direct video URL from iframe embed pages
+ * Supports: uqload, doodstream, streamtape
+ */
+async function extractDirectUrl(iframeUrl: string): Promise<string | null> {
+    try {
+        console.log(`Extracting direct URL from: ${iframeUrl}`);
+        
+        const urlLower = iframeUrl.toLowerCase();
+        
+        // UQLoad extractor
+        if (urlLower.includes('uqload')) {
+            return await extractUQLoad(iframeUrl);
+        }
+        
+        // Doodstream extractor
+        if (urlLower.includes('dood')) {
+            return await extractDoodstream(iframeUrl);
+        }
+        
+        // Streamtape extractor
+        if (urlLower.includes('streamtape')) {
+            return await extractStreamtape(iframeUrl);
+        }
+        
+        // Add more extractors here as needed
+        
+        console.log(`No extractor available for: ${iframeUrl}`);
+        return null;
+    } catch (error: any) {
+        console.error(`Error extracting from ${iframeUrl}:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Extract UQLoad video URL
+ */
+async function extractUQLoad(url: string): Promise<string | null> {
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://cuevana3.to/",
+            },
+            timeout: 10000,
+        });
+        
+        // UQLoad embeds the video source in JavaScript
+        const match = data.match(/sources:\s*\[\s*{[^}]*file:\s*["']([^"']+)["']/i);
+        if (match && match[1]) {
+            console.log(`✓ Extracted UQLoad URL: ${match[1]}`);
+            return match[1];
+        }
+        
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Extract Doodstream video URL
+ */
+async function extractDoodstream(url: string): Promise<string | null> {
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://cuevana3.to/",
+            },
+            timeout: 10000,
+        });
+        
+        // Doodstream uses a token-based system
+        const passMatch = data.match(/\$\.get\('\/pass_md5\/[^']+',\s*function\(data\)/);
+        if (passMatch) {
+            const tokenMatch = data.match(/\/pass_md5\/([^']+)/);
+            if (tokenMatch) {
+                const token = tokenMatch[1];
+                const domain = new URL(url).origin;
+                const passUrl = `${domain}/pass_md5/${token}`;
+                
+                const { data: passData } = await axios.get(passUrl, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Referer": url,
+                    },
+                    timeout: 5000,
+                });
+                
+                if (passData) {
+                    console.log(`✓ Extracted Doodstream URL`);
+                    return passData;
+                }
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Extract Streamtape video URL
+ */
+async function extractStreamtape(url: string): Promise<string | null> {
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://cuevana3.to/",
+            },
+            timeout: 10000,
+        });
+        
+        // Streamtape hides the video URL in obfuscated JavaScript
+        const idMatch = data.match(/id=["']([^"']+)["']/);
+        const tokenMatch = data.match(/token=([^&"'\s]+)/);
+        
+        if (idMatch && tokenMatch) {
+            const videoUrl = `https://streamtape.com/get_video?id=${idMatch[1]}&token=${tokenMatch[1]}`;
+            console.log(`✓ Extracted Streamtape URL: ${videoUrl}`);
+            return videoUrl;
+        }
+        
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+/**
  * Main function: Get all streams for a movie or TV episode
  */
 export async function getCuevanaStreams(
@@ -549,13 +682,17 @@ export async function getCuevanaStreams(
                     continue;
                 }
                 
+                // Try to extract direct video URL from iframe
+                const directUrl = await extractDirectUrl(streamUrl);
+                const finalUrl = directUrl || streamUrl;
+                
                 streams.push({
                     quality: option.title,
-                    url: streamUrl,
+                    url: finalUrl,
                     language: language,
                 });
                 
-                console.log(`✓ Added stream: ${option.title} (${language})`);
+                console.log(`✓ Added stream: ${option.title} (${language}) - URL: ${finalUrl.substring(0, 100)}...`);
             }
         }
 
