@@ -1,9 +1,9 @@
-import puppeteer from "puppeteer";
-import chromeLauncher from "chrome-aws-lambda";
 import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://cuevana3.to";
+const SCRAPER_API_KEY = "face5a42440beebf029a84b4b333dcaf";
+const SCRAPER_API_URL = "https://api.scraperapi.com";
 
 export interface CuevanaStream {
     quality: string;
@@ -18,68 +18,45 @@ interface PlayerOption {
 }
 
 /**
- * Search for a movie or TV show on Cuevana using Puppeteer + chrome-aws-lambda
+ * Search for a movie or TV show on Cuevana using ScraperAPI
  */
 export async function searchCuevana(
     title: string,
     year?: number,
     type: "movie" | "tv" = "movie",
 ): Promise<string | null> {
-    let browser;
     try {
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
         console.log(`Fetching search results from: ${searchUrl}`);
         
-        // Use chrome-aws-lambda with Puppeteer
-        browser = await puppeteer.launch({
-            args: [...chromeLauncher.args, '--no-sandbox', '--disable-setuid-sandbox'],
-            executablePath: await chromeLauncher.executablePath,
-            headless: chromeLauncher.headless,
-            ignoreHTTPSErrors: true,
+        // Use ScraperAPI to bypass Cloudflare and render JavaScript
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true`;
+        
+        const { data } = await axios.get(scraperUrl, {
+            timeout: 60000, // ScraperAPI puede tardar más
         });
 
-        const page = await browser.newPage();
-        await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        );
+        const $ = cheerio.load(data);
+        const results: any[] = [];
 
-        await page.goto(searchUrl, {
-            waitUntil: "domcontentloaded",
-            timeout: 30000,
+        $("article.TPost").each((_, article) => {
+            const $article = $(article);
+            const link =
+                $article.find("div.Image a").attr("href") ||
+                $article.find("a").attr("href");
+            const titleText = $article.find("h2.Title, .Title").text().trim();
+            const yearText = $article.find(".Year, span.Year").text().trim();
+            const yearMatch = yearText.match(/\d{4}/);
+            const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
+
+            if (link && titleText) {
+                results.push({
+                    title: titleText,
+                    year: itemYear,
+                    url: link,
+                });
+            }
         });
-
-        // Wait a bit for dynamic content
-        await page.waitForTimeout(2000);
-
-        // Extract search results
-        const results = await page.evaluate(() => {
-            const items: any[] = [];
-            const articles = document.querySelectorAll("article.TPost");
-
-            articles.forEach((article) => {
-                const link =
-                    article.querySelector("div.Image a")?.getAttribute("href") ||
-                    article.querySelector("a")?.getAttribute("href");
-                const titleEl = article.querySelector("h2.Title, .Title");
-                const titleText = titleEl?.textContent?.trim() || "";
-                const yearEl = article.querySelector(".Year, span.Year");
-                const yearText = yearEl?.textContent?.trim() || "";
-                const yearMatch = yearText.match(/\d{4}/);
-                const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
-
-                if (link && titleText) {
-                    items.push({
-                        title: titleText,
-                        year: itemYear,
-                        url: link,
-                    });
-                }
-            });
-
-            return items;
-        });
-
-        await browser.close();
 
         console.log(`Total results found: ${results.length}`);
         results.forEach((r) => {
@@ -122,13 +99,6 @@ export async function searchCuevana(
         return results.length > 0 ? results[0].url : null;
     } catch (error) {
         console.error("Error searching Cuevana:", error);
-        if (browser) {
-            try {
-                await browser.close();
-            } catch (e) {
-                console.error("Error closing browser:", e);
-            }
-        }
         return null;
     }
 }
@@ -171,71 +141,41 @@ export async function getCuevanaEpisodeUrl(
 }
 
 /**
- * Extract player options using Puppeteer + chrome-aws-lambda
+ * Extract player options using ScraperAPI
  */
 async function getPlayerOptions(
     pageUrl: string,
 ): Promise<PlayerOption[] | null> {
-    let browser;
     try {
-        console.log("Launching browser with chrome-aws-lambda...");
+        console.log("Fetching player options with ScraperAPI...");
         
-        // Use chrome-aws-lambda with Puppeteer
-        browser = await puppeteer.launch({
-            args: [...chromeLauncher.args, '--no-sandbox', '--disable-setuid-sandbox'],
-            executablePath: await chromeLauncher.executablePath,
-            headless: chromeLauncher.headless,
-            ignoreHTTPSErrors: true,
-        });
-
-        console.log("Creating new page...");
-        const page = await browser.newPage();
-        await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        );
-
+        // Use ScraperAPI to bypass Cloudflare and render JavaScript
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        
         console.log(`Navigating to: ${pageUrl}`);
-        await page.goto(pageUrl, {
-            waitUntil: "domcontentloaded",
-            timeout: 30000,
+        const { data } = await axios.get(scraperUrl, {
+            timeout: 60000,
         });
-
-        console.log("Waiting for player options...");
-        // Wait for player options to load
-        await page.waitForSelector("#OptUl li", { timeout: 15000 });
 
         console.log("Extracting player options...");
-        // Extract player options
-        const options = await page.evaluate(() => {
-            const items: PlayerOption[] = [];
-            const optionElements = document.querySelectorAll("#OptUl li");
+        const $ = cheerio.load(data);
+        const options: PlayerOption[] = [];
 
-            optionElements.forEach((li) => {
-                const title =
-                    li.querySelector(".title")?.textContent?.trim() || "";
-                const dataPost = li.getAttribute("data-post") || "";
-                const dataNume = li.getAttribute("data-nume") || "";
+        $("#OptUl li").each((_, li) => {
+            const $li = $(li);
+            const title = $li.find(".title").text().trim() || "";
+            const dataPost = $li.attr("data-post") || "";
+            const dataNume = $li.attr("data-nume") || "";
 
-                if (dataPost && dataNume && dataPost !== "undefined") {
-                    items.push({ title, dataPost, dataNume });
-                }
-            });
-
-            return items;
+            if (dataPost && dataNume && dataPost !== "undefined") {
+                options.push({ title, dataPost, dataNume });
+            }
         });
 
-        await browser.close();
         console.log(`Extracted ${options.length} player options`);
         return options.length > 0 ? options : null;
     } catch (error) {
         console.error("Error extracting player options:", error);
-        if (browser) {
-            try {
-                await browser.close();
-            } catch (e) {
-                console.error("Error closing browser:", e);
-            }
-        }
         return null;
     }
 }
@@ -346,8 +286,8 @@ export async function getCuevanaStreams(
             console.log(`Found episode at: ${pageUrl}`);
         }
 
-        // Step 3: Extract player options with Puppeteer
-        console.log("Extracting player options with Puppeteer...");
+        // Step 3: Extract player options with ScraperAPI
+        console.log("Extracting player options with ScraperAPI...");
         const playerOptions = await getPlayerOptions(pageUrl);
         if (!playerOptions || playerOptions.length === 0) {
             console.log("No player options found");
