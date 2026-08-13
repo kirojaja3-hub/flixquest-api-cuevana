@@ -289,19 +289,55 @@ async function getPlayerOptions(
             });
 
             console.log(`Direct scraping player page HTML (${data.length} chars)`);
+            
+            // Debug: see what player-related elements exist
             const $ = cheerio.load(data);
+            console.log(`=== PLAYER DEBUG ===`);
+            console.log(`#OptUl elements: ${$("#OptUl").length}`);
+            console.log(`#OptUl li elements: ${$("#OptUl li").length}`);
+            console.log(`li elements with data-post: ${$("li[data-post]").length}`);
+            console.log(`All li elements: ${$("li").length}`);
+            console.log(`Elements with class Opt: ${$(".Opt").length}`);
+            console.log(`Elements with class player: ${$(".player").length}`);
+            
+            // Try to find any player option structure
+            const possibleSelectors = [
+                "#OptUl li",
+                ".OptUl li", 
+                "li[data-post]",
+                ".player-option",
+                "[data-nume]",
+                "#playeroptionsul li"
+            ];
+            
+            let foundSelector = null;
             const options: PlayerOption[] = [];
 
-            $("#OptUl li").each((_, li) => {
-                const $li = $(li);
-                const title = $li.find(".title").text().trim() || "";
-                const dataPost = $li.attr("data-post") || "";
-                const dataNume = $li.attr("data-nume") || "";
+            for (const selector of possibleSelectors) {
+                const found = $(selector);
+                console.log(`Trying selector "${selector}": ${found.length} elements`);
+                
+                if (found.length > 0) {
+                    found.each((_, li) => {
+                        const $li = $(li);
+                        const title = $li.find(".title").text().trim() || $li.text().trim() || "";
+                        const dataPost = $li.attr("data-post") || "";
+                        const dataNume = $li.attr("data-nume") || "";
 
-                if (dataPost && dataNume && dataPost !== "undefined") {
-                    options.push({ title, dataPost, dataNume });
+                        console.log(`  - Element: title="${title}", data-post="${dataPost}", data-nume="${dataNume}"`);
+
+                        if (dataPost && dataNume && dataPost !== "undefined") {
+                            options.push({ title, dataPost, dataNume });
+                        }
+                    });
+                    
+                    if (options.length > 0) {
+                        foundSelector = selector;
+                        console.log(`✓ Found ${options.length} options with selector: ${selector}`);
+                        break;
+                    }
                 }
-            });
+            }
 
             console.log(`Extracted ${options.length} player options`);
             if (options.length > 0) {
