@@ -6,7 +6,7 @@
     "scripts": {
         "start": "ts-node src/index.ts",
         "dev": "nodemon src/index.ts",
-        "postinstall": "npx playwright install chromium",
+        "build": "npx playwright install chromium",
         "lint": "prettier --write .",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
