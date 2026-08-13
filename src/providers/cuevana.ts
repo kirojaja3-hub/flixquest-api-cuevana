@@ -27,6 +27,8 @@ export async function searchCuevana(
 ): Promise<string | null> {
     try {
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
+        console.log(`Fetching search results from: ${searchUrl}`);
+        
         const { data } = await axios.get(searchUrl, {
             headers: {
                 "User-Agent":
@@ -37,14 +39,21 @@ export async function searchCuevana(
         const $ = cheerio.load(data);
         const results: any[] = [];
 
+        // Updated selector - Cuevana uses article.TPost.Movie or article.TPost.Tvshows
         $("article.TPost").each((_, element) => {
             const $el = $(element);
-            const link = $el.find("a").attr("href");
-            const titleText = $el.find("h2.Title").text().trim();
-            const yearMatch = $el.find(".Year").text().match(/\d{4}/);
+            // The link is in the <a> tag inside the <div class="Image">
+            const link = $el.find("div.Image a").attr("href") || $el.find("a").first().attr("href");
+            // Title is in <h2 class="Title">
+            const titleText = $el.find("h2.Title, .Title").text().trim();
+            // Year is in span.Year or similar
+            const yearText = $el.find(".Year, span.Year").text().trim();
+            const yearMatch = yearText.match(/\d{4}/);
             const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
 
-            if (link) {
+            console.log(`Found: "${titleText}" (${itemYear}) -> ${link}`);
+
+            if (link && titleText) {
                 results.push({
                     title: titleText,
                     year: itemYear,
@@ -53,16 +62,47 @@ export async function searchCuevana(
             }
         });
 
+        console.log(`Total results found: ${results.length}`);
+
+        if (results.length === 0) {
+            console.log("No results found in search");
+            return null;
+        }
+
         // Find best match
         const normalizedTitle = title.toLowerCase().trim();
         for (const result of results) {
             const normalizedResultTitle = result.title.toLowerCase().trim();
+            
+            // Remove year from title if present (e.g., "Joker (2019)" -> "joker")
+            const cleanTitle = normalizedResultTitle.replace(/\s*\(\d{4}\)\s*/g, "").trim();
+            
+            console.log(`Comparing: "${normalizedTitle}" with "${cleanTitle}"`);
+            
             if (
-                normalizedResultTitle.includes(normalizedTitle) ||
-                normalizedTitle.includes(normalizedResultTitle)
+                cleanTitle.includes(normalizedTitle) ||
+                normalizedTitle.includes(cleanTitle)
             ) {
                 if (year) {
                     if (result.year === year) {
+                        console.log(`✓ Match found: ${result.url}`);
+                        return result.url;
+                    }
+                } else {
+                    console.log(`✓ Match found (no year check): ${result.url}`);
+                    return result.url;
+                }
+            }
+        }
+
+        // Fallback: return first result if no exact match
+        console.log(`No exact match, returning first result: ${results[0].url}`);
+        return results.length > 0 ? results[0].url : null;
+    } catch (error) {
+        console.error("Error searching Cuevana:", error);
+        return null;
+    }
+}
                         return result.url;
                     }
                 } else {
