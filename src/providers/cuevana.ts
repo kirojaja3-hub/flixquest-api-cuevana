@@ -29,12 +29,17 @@ export async function searchCuevana(
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
         console.log(`Fetching search results from: ${searchUrl}`);
         
-        // Use ScraperAPI to bypass Cloudflare and render JavaScript
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true`;
+        // Use ScraperAPI with premium settings for JavaScript rendering
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(searchUrl)}&render=true&wait_for_selector=article.TPost&session_number=1`;
+        
+        console.log(`ScraperAPI URL: ${scraperUrl}`);
         
         const { data } = await axios.get(scraperUrl, {
-            timeout: 60000, // ScraperAPI puede tardar más
+            timeout: 90000, // ScraperAPI puede tardar más con espera de selector
         });
+        
+        // Debug: log first 500 chars of HTML
+        console.log(`HTML preview: ${data.substring(0, 500)}`);
 
         const $ = cheerio.load(data);
         const results: any[] = [];
@@ -149,13 +154,16 @@ async function getPlayerOptions(
     try {
         console.log("Fetching player options with ScraperAPI...");
         
-        // Use ScraperAPI to bypass Cloudflare and render JavaScript
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        // Use ScraperAPI with premium settings for JavaScript rendering
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true&wait_for_selector=%23OptUl&session_number=1`;
         
         console.log(`Navigating to: ${pageUrl}`);
         const { data } = await axios.get(scraperUrl, {
-            timeout: 60000,
+            timeout: 90000,
         });
+        
+        // Debug: log HTML preview
+        console.log(`HTML preview: ${data.substring(0, 500)}`);
 
         console.log("Extracting player options...");
         const $ = cheerio.load(data);
