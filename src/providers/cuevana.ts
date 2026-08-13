@@ -31,13 +31,24 @@ export async function searchCuevana(
         console.log(`Fetching search results from: ${searchUrl}`);
         
         // Use Playwright to bypass Cloudflare
-        const execPath = await chromeLauncher.executablePath;
-        
-        browser = await chromium.launch({
+        // chrome-aws-lambda returns the path differently
+        const launchOptions: any = {
             headless: true,
-            executablePath: execPath,
-            args: chromeLauncher.args,
-        });
+            args: [
+                ...chromeLauncher.args,
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+            ],
+        };
+
+        // Only set executablePath if chrome-aws-lambda provides one
+        const chromePath = await chromeLauncher.executablePath;
+        if (chromePath && typeof chromePath === 'string') {
+            launchOptions.executablePath = chromePath;
+        }
+        
+        browser = await chromium.launch(launchOptions);
 
         const context = await browser.newContext({
             userAgent:
@@ -183,11 +194,23 @@ async function getPlayerOptions(
         console.log("Launching browser with chrome-aws-lambda...");
         
         // Use chrome-aws-lambda for Render compatibility
-        browser = await chromium.launch({
+        const launchOptions: any = {
             headless: true,
-            executablePath: await chromeLauncher.executablePath,
-            args: chromeLauncher.args,
-        });
+            args: [
+                ...chromeLauncher.args,
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+            ],
+        };
+
+        // Only set executablePath if chrome-aws-lambda provides one
+        const chromePath = await chromeLauncher.executablePath;
+        if (chromePath && typeof chromePath === 'string') {
+            launchOptions.executablePath = chromePath;
+        }
+        
+        browser = await chromium.launch(launchOptions);
 
         console.log("Creating new page...");
         const context = await browser.newContext({
