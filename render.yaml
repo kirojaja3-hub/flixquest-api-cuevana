@@ -1,10 +1,12 @@
 services:
     - type: web
-      name: flixquest-api # Name of the service
-      env: docker
-      repo: https://github.com/BeamlakAschalew/flixquest-api.git
+      name: flixquest-api-cuevana
+      env: node
       plan: free
-      branch: main
+      buildCommand: npm install
+      startCommand: npm start
       envVars:
           - key: PORT
             value: 3000
+          - key: TMDB_KEY
+            sync: false

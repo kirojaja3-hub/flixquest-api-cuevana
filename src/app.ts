@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import daddylive from "./routes/daddylive";
+import cuevana from "./routes/cuevana";
 import chalk from "chalk";
 import FastifyCors from "@fastify/cors";
 import dotenv from "dotenv";
@@ -43,6 +44,7 @@ async function startServer() {
     });
 
     await fastify.register(daddylive, { prefix: "/daddylive" });
+    await fastify.register(cuevana, { prefix: "/cuevana" });
 
     try {
         fastify.get("/", async (_, rp) => {

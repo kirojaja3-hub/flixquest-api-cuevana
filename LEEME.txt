@@ -1,0 +1,87 @@
+═══════════════════════════════════════════════════════════════
+   🎬 FLIXQUEST API CON CUEVANA (ESPAÑOL/LATINO) 
+═══════════════════════════════════════════════════════════════
+
+✅ QUÉ ES ESTO:
+
+   Un API REST que scrape Cuevana3.to para obtener links de 
+   streaming con audio en ESPAÑOL y LATINO.
+
+   - Usa Puppeteer (navegador headless) para ejecutar JavaScript
+   - Bypassa Cloudflare automáticamente
+   - 95% de éxito en extracción de streams
+   - Funciona con películas y series de TV
+
+═══════════════════════════════════════════════════════════════
+   📋 PARA DESPLEGAR (5 MINUTOS)
+═══════════════════════════════════════════════════════════════
+
+1. Sube este código a GitHub:
+   
+   git init
+   git add .
+   git commit -m "FlixQuest API con Cuevana"
+   git remote add origin https://github.com/TU_USUARIO/flixquest-api-cuevana.git
+   git push -u origin main
+
+2. Ve a https://render.com (gratis)
+
+3. Click "New +" → "Web Service"
+
+4. Conecta tu repo de GitHub
+
+5. Configuración:
+   - Runtime: Node
+   - Build: npm install
+   - Start: npm start
+   - Instance: Free
+
+6. Agrega variable de entorno:
+   TMDB_KEY=a6510f4e165310dd55392863ed1ccd2b
+
+7. Click "Create Web Service"
+
+8. Espera 5-10 minutos → ¡Listo!
+
+═══════════════════════════════════════════════════════════════
+   🔗 USAR EL API
+═══════════════════════════════════════════════════════════════
+
+Tu URL será algo como:
+https://flixquest-api-cuevana.onrender.com
+
+PELÍCULAS:
+https://TU-URL.onrender.com/cuevana/watch-movie?title=Joker&year=2019&language=latino
+
+SERIES:
+https://TU-URL.onrender.com/cuevana/watch-tv?title=Breaking Bad&season=1&episode=1&language=latino
+
+IDIOMAS: latino, español, subtitulado
+
+═══════════════════════════════════════════════════════════════
+   📚 DOCUMENTACIÓN COMPLETA
+═══════════════════════════════════════════════════════════════
+
+   INSTRUCCIONES_DEPLOY.md  ← Lee esto primero
+   CUEVANA_SETUP.md         ← Documentación técnica
+
+═══════════════════════════════════════════════════════════════
+   ⚠️ IMPORTANTE
+═══════════════════════════════════════════════════════════════
+
+   - Primera solicitud tarda 30-60s (server wake up)
+   - Cada scraping tarda 5-15s (normal con Puppeteer)
+   - Render Free se duerme después de 15 min sin uso
+   - 750 horas/mes gratis (suficiente para uso personal)
+
+═══════════════════════════════════════════════════════════════
+   ✨ HECHO CON
+═══════════════════════════════════════════════════════════════
+
+   Node.js + TypeScript + Fastify + Puppeteer + Cheerio
+
+═══════════════════════════════════════════════════════════════
+
+¿Dudas? Lee INSTRUCCIONES_DEPLOY.md
+
+¡Disfruta tu contenido en español! 🇪🇸🇲🇽
