@@ -307,9 +307,13 @@ async function getPlayerOptions(
             // If we found iframes, return them as player options
             if (iframes.length > 0) {
                 console.log(`Found ${iframes.length} iframes in page`);
+                // Extract post ID from URL for consistency
+                const urlMatch = pageUrl.match(/\/(\d+)\//);
+                const postIdFromUrl = urlMatch ? urlMatch[1] : "";
+                
                 const options: PlayerOption[] = iframes.map((url, index) => ({
                     title: `Reproductor ${index + 1}`,
-                    dataPost: postId || "",
+                    dataPost: postIdFromUrl,
                     dataNume: String(index + 1),
                     // Store the iframe URL directly
                     embedUrl: url,
@@ -319,7 +323,7 @@ async function getPlayerOptions(
             
             // Extract data-post from the page source (it's in the HTML, just not in OptUl yet)
             // Try multiple patterns
-            let postId = null;
+            let postId: string | null = null;
             
             // Pattern 1: data-post="12345"
             let match = data.match(/data-post\s*=\s*["'](\d+)["']/i);
@@ -523,7 +527,7 @@ export async function getCuevanaStreams(
             console.log(`Testing option: ${option.title} (post=${option.dataPost}, nume=${option.dataNume})`);
             
             // If we already have the embed URL from iframe scraping, use it directly
-            let streamUrl = option.embedUrl;
+            let streamUrl: string | null | undefined = option.embedUrl;
             
             if (!streamUrl) {
                 // Otherwise, try the AJAX endpoint
