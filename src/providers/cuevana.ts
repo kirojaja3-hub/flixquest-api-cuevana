@@ -473,7 +473,7 @@ function detectLanguage(title: string): string {
 
 /**
  * Extract direct video URL from iframe embed pages
- * Supports: uqload, doodstream, streamtape
+ * Supports: uqload, doodstream, streamtape, pelistop, jawcloud, fastplay
  */
 async function extractDirectUrl(iframeUrl: string): Promise<string | null> {
     try {
@@ -494,6 +494,11 @@ async function extractDirectUrl(iframeUrl: string): Promise<string | null> {
         // Streamtape extractor
         if (urlLower.includes('streamtape')) {
             return await extractStreamtape(iframeUrl);
+        }
+        
+        // Pelistop / Jawcloud / Fastplay (similar structure)
+        if (urlLower.includes('pelistop') || urlLower.includes('jawcloud') || urlLower.includes('fastplay')) {
+            return await extractGenericEmbed(iframeUrl);
         }
         
         // Add more extractors here as needed
@@ -571,6 +576,50 @@ async function extractDoodstream(url: string): Promise<string | null> {
         
         return null;
     } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Generic extractor for sites with common embed patterns
+ * Works for: pelistop, jawcloud, fastplay, and similar
+ */
+async function extractGenericEmbed(url: string): Promise<string | null> {
+    try {
+        const { data } = await axios.get(url, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://cuevana3.to/",
+            },
+            timeout: 10000,
+        });
+        
+        // Try common patterns for video sources
+        const patterns = [
+            /sources:\s*\[\s*{[^}]*file:\s*["']([^"']+)["']/i,
+            /file:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+            /src:\s*["']([^"']+\.m3u8[^"']*)["']/i,
+            /"file":\s*["']([^"']+)["']/i,
+            /source\s+src=["']([^"']+)["']/i,
+        ];
+        
+        for (const pattern of patterns) {
+            const match = data.match(pattern);
+            if (match && match[1]) {
+                const videoUrl = match[1];
+                // Make sure it's a valid URL
+                if (videoUrl.startsWith('http') || videoUrl.startsWith('//')) {
+                    const finalUrl = videoUrl.startsWith('//') ? `https:${videoUrl}` : videoUrl;
+                    console.log(`✓ Extracted generic embed URL: ${finalUrl}`);
+                    return finalUrl;
+                }
+            }
+        }
+        
+        console.log(`Could not extract from generic embed: ${url}`);
+        return null;
+    } catch (error: any) {
+        console.error(`Error in generic extractor: ${error.message}`);
         return null;
     }
 }
