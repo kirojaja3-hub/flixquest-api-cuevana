@@ -1,4 +1,4 @@
-import { chromium } from "playwright-core";
+import puppeteer from "puppeteer-core";
 import chromeLauncher from "chrome-aws-lambda";
 import axios from "axios";
 import * as cheerio from "cheerio";
@@ -18,7 +18,7 @@ interface PlayerOption {
 }
 
 /**
- * Search for a movie or TV show on Cuevana using Playwright (to bypass Cloudflare)
+ * Search for a movie or TV show on Cuevana using Puppeteer + chrome-aws-lambda
  */
 export async function searchCuevana(
     title: string,
@@ -30,38 +30,24 @@ export async function searchCuevana(
         const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(title)}`;
         console.log(`Fetching search results from: ${searchUrl}`);
         
-        // Use Playwright to bypass Cloudflare
-        // chrome-aws-lambda returns the path differently
-        const launchOptions: any = {
-            headless: true,
-            args: [
-                ...chromeLauncher.args,
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-            ],
-        };
-
-        // Only set executablePath if chrome-aws-lambda provides one
-        const chromePath = await chromeLauncher.executablePath;
-        if (chromePath && typeof chromePath === 'string') {
-            launchOptions.executablePath = chromePath;
-        }
-        
-        browser = await chromium.launch(launchOptions);
-
-        const context = await browser.newContext({
-            userAgent:
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        // Use chrome-aws-lambda with Puppeteer
+        browser = await puppeteer.launch({
+            args: chromeLauncher.args,
+            executablePath: await chromeLauncher.executablePath,
+            headless: chromeLauncher.headless,
         });
-        const page = await context.newPage();
+
+        const page = await browser.newPage();
+        await page.setUserAgent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        );
 
         await page.goto(searchUrl, {
             waitUntil: "domcontentloaded",
             timeout: 30000,
         });
 
-        // Wait for results to load
+        // Wait a bit for dynamic content
         await page.waitForTimeout(2000);
 
         // Extract search results
@@ -109,7 +95,7 @@ export async function searchCuevana(
         for (const result of results) {
             const normalizedResultTitle = result.title.toLowerCase().trim();
             
-            // Remove year from title if present (e.g., "Joker (2019)" -> "joker")
+            // Remove year from title if present
             const cleanTitle = normalizedResultTitle.replace(/\s*\(\d{4}\)\s*/g, "").trim();
             
             console.log(`Comparing: "${normalizedTitle}" with "${cleanTitle}"`);
@@ -130,7 +116,7 @@ export async function searchCuevana(
             }
         }
 
-        // Fallback: return first result if no exact match
+        // Fallback: return first result
         console.log(`No exact match, returning first result: ${results[0].url}`);
         return results.length > 0 ? results[0].url : null;
     } catch (error) {
@@ -184,7 +170,7 @@ export async function getCuevanaEpisodeUrl(
 }
 
 /**
- * Extract player options using Playwright (JavaScript execution required)
+ * Extract player options using Puppeteer + chrome-aws-lambda
  */
 async function getPlayerOptions(
     pageUrl: string,
@@ -193,31 +179,18 @@ async function getPlayerOptions(
     try {
         console.log("Launching browser with chrome-aws-lambda...");
         
-        // Use chrome-aws-lambda for Render compatibility
-        const launchOptions: any = {
-            headless: true,
-            args: [
-                ...chromeLauncher.args,
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-            ],
-        };
-
-        // Only set executablePath if chrome-aws-lambda provides one
-        const chromePath = await chromeLauncher.executablePath;
-        if (chromePath && typeof chromePath === 'string') {
-            launchOptions.executablePath = chromePath;
-        }
-        
-        browser = await chromium.launch(launchOptions);
+        // Use chrome-aws-lambda with Puppeteer
+        browser = await puppeteer.launch({
+            args: chromeLauncher.args,
+            executablePath: await chromeLauncher.executablePath,
+            headless: chromeLauncher.headless,
+        });
 
         console.log("Creating new page...");
-        const context = await browser.newContext({
-            userAgent:
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        });
-        const page = await context.newPage();
+        const page = await browser.newPage();
+        await page.setUserAgent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        );
 
         console.log(`Navigating to: ${pageUrl}`);
         await page.goto(pageUrl, {

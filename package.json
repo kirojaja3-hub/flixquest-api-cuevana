@@ -6,7 +6,6 @@
     "scripts": {
         "start": "ts-node src/index.ts",
         "dev": "nodemon src/index.ts",
-        "build": "npx playwright install chromium",
         "lint": "prettier --write .",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
@@ -22,8 +21,8 @@
         "dotenv": "^16.3.1",
         "fastify": "^4.24.3",
         "ioredis": "^5.3.2",
-        "playwright-core": "^1.40.0",
         "prettier": "^3.1.0",
+        "puppeteer-core": "^10.4.0",
         "ts-node": "^10.9.1",
         "typescript": "5.0.2"
     },
