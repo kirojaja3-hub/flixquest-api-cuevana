@@ -49,27 +49,57 @@ export async function searchCuevana(
             
             console.log(`Direct scraping HTML received (${data.length} chars)`);
             
+            // Debug: Save HTML snippet to see structure
+            const htmlSnippet = data.substring(0, 3000);
+            console.log(`=== HTML PREVIEW START ===`);
+            console.log(htmlSnippet);
+            console.log(`=== HTML PREVIEW END ===`);
+            
             const $ = cheerio.load(data);
             const results: any[] = [];
 
-            $("article.TPost").each((_, article) => {
-                const $article = $(article);
-                const link =
-                    $article.find("div.Image a").attr("href") ||
-                    $article.find("a").attr("href");
-                const titleText = $article.find("h2.Title, .Title").text().trim();
-                const yearText = $article.find(".Year, span.Year").text().trim();
-                const yearMatch = yearText.match(/\d{4}/);
-                const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
+            // Try multiple selectors
+            const selectors = [
+                "article.TPost",
+                "article",
+                ".TPost",
+                ".MovieList article",
+                ".search-item",
+                ".item-peliculas"
+            ];
+            
+            for (const selector of selectors) {
+                const found = $(selector);
+                console.log(`Selector "${selector}" found ${found.length} elements`);
+                
+                if (found.length > 0) {
+                    found.each((_, article) => {
+                        const $article = $(article);
+                        const link =
+                            $article.find("div.Image a").attr("href") ||
+                            $article.find("a").first().attr("href");
+                        const titleText = 
+                            $article.find("h2.Title, .Title, h2, h3").first().text().trim() ||
+                            $article.find("a").first().attr("title") || "";
+                        const yearText = $article.find(".Year, span.Year, .Date").text().trim();
+                        const yearMatch = yearText.match(/\d{4}/);
+                        const itemYear = yearMatch ? parseInt(yearMatch[0]) : null;
 
-                if (link && titleText) {
-                    results.push({
-                        title: titleText,
-                        year: itemYear,
-                        url: link,
+                        if (link && titleText) {
+                            results.push({
+                                title: titleText,
+                                year: itemYear,
+                                url: link,
+                            });
+                        }
                     });
+                    
+                    if (results.length > 0) {
+                        console.log(`Found ${results.length} results with selector: ${selector}`);
+                        break;
+                    }
                 }
-            });
+            }
 
             console.log(`Total results found: ${results.length}`);
             
