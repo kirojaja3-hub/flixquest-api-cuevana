@@ -15,6 +15,7 @@ interface PlayerOption {
     title: string;
     dataPost: string;
     dataNume: string;
+    embedUrl?: string; // Direct embed URL if available
 }
 
 /**
@@ -290,6 +291,32 @@ async function getPlayerOptions(
             console.log(data.substring(0, 5000));
             console.log(`=== END HTML SAMPLE ===`);
             
+            // ALTERNATIVE APPROACH: Extract iframe sources directly from the HTML
+            // Cuevana embeds players as iframes, let's find them
+            const $ = cheerio.load(data);
+            const iframes: string[] = [];
+            
+            $('iframe').each((_, elem) => {
+                const src = $(elem).attr('src') || $(elem).attr('data-src');
+                if (src) {
+                    iframes.push(src);
+                    console.log(`Found iframe: ${src}`);
+                }
+            });
+            
+            // If we found iframes, return them as player options
+            if (iframes.length > 0) {
+                console.log(`Found ${iframes.length} iframes in page`);
+                const options: PlayerOption[] = iframes.map((url, index) => ({
+                    title: `Reproductor ${index + 1}`,
+                    dataPost: postId || "",
+                    dataNume: String(index + 1),
+                    // Store the iframe URL directly
+                    embedUrl: url,
+                }));
+                return options;
+            }
+            
             // Extract data-post from the page source (it's in the HTML, just not in OptUl yet)
             // Try multiple patterns
             let postId = null;
@@ -495,10 +522,18 @@ export async function getCuevanaStreams(
         for (const option of playerOptions) {
             console.log(`Testing option: ${option.title} (post=${option.dataPost}, nume=${option.dataNume})`);
             
-            const streamUrl = await fetchStreamUrl(
-                option.dataPost,
-                option.dataNume,
-            );
+            // If we already have the embed URL from iframe scraping, use it directly
+            let streamUrl = option.embedUrl;
+            
+            if (!streamUrl) {
+                // Otherwise, try the AJAX endpoint
+                streamUrl = await fetchStreamUrl(
+                    option.dataPost,
+                    option.dataNume,
+                );
+            } else {
+                console.log(`Using direct iframe URL: ${streamUrl}`);
+            }
             
             if (streamUrl) {
                 // Detect language from option title
