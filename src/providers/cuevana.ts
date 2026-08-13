@@ -32,9 +32,10 @@ export async function searchCuevana(
         
         // Use chrome-aws-lambda with Puppeteer
         browser = await puppeteer.launch({
-            args: chromeLauncher.args,
+            args: [...chromeLauncher.args, '--no-sandbox', '--disable-setuid-sandbox'],
             executablePath: await chromeLauncher.executablePath,
             headless: chromeLauncher.headless,
+            ignoreHTTPSErrors: true,
         });
 
         const page = await browser.newPage();
@@ -181,9 +182,10 @@ async function getPlayerOptions(
         
         // Use chrome-aws-lambda with Puppeteer
         browser = await puppeteer.launch({
-            args: chromeLauncher.args,
+            args: [...chromeLauncher.args, '--no-sandbox', '--disable-setuid-sandbox'],
             executablePath: await chromeLauncher.executablePath,
             headless: chromeLauncher.headless,
+            ignoreHTTPSErrors: true,
         });
 
         console.log("Creating new page...");
