@@ -103,21 +103,6 @@ export async function searchCuevana(
         return null;
     }
 }
-                        return result.url;
-                    }
-                } else {
-                    return result.url;
-                }
-            }
-        }
-
-        // Fallback: return first result
-        return results.length > 0 ? results[0].url : null;
-    } catch (error) {
-        console.error("Error searching Cuevana:", error);
-        return null;
-    }
-}
 
 /**
  * Get TV episode URL
