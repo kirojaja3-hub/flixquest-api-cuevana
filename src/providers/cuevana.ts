@@ -1,4 +1,4 @@
-import puppeteer from "puppeteer-core";
+import puppeteer from "puppeteer";
 import chromeLauncher from "chrome-aws-lambda";
 import axios from "axios";
 import * as cheerio from "cheerio";
