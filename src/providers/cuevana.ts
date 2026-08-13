@@ -269,7 +269,10 @@ async function getPlayerOptions(
         
         // Try direct scraping first
         try {
-            const { data } = await axios.get(pageUrl, {
+            // Ensure absolute URL
+            const absoluteUrl = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
+            
+            const { data } = await axios.get(absoluteUrl, {
                 headers: {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -310,7 +313,9 @@ async function getPlayerOptions(
         }
         
         // Fallback to ScraperAPI
-        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        // Ensure absolute URL
+        const absoluteUrl = pageUrl.startsWith('http') ? pageUrl : `${BASE_URL}${pageUrl}`;
+        const scraperUrl = `${SCRAPER_API_URL}/?api_key=${SCRAPER_API_KEY}&url=${encodeURIComponent(absoluteUrl)}&render=true`;
         
         console.log(`ScraperAPI fallback for player options...`);
         const { data } = await axios.get(scraperUrl, {
