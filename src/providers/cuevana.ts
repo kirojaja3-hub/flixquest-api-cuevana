@@ -490,25 +490,33 @@ export async function getCuevanaStreams(
         console.log(`Found ${playerOptions.length} player options`);
 
         // Step 4: Fetch stream URLs
+        console.log(`Fetching streams for ${playerOptions.length} options...`);
         const streams: CuevanaStream[] = [];
         for (const option of playerOptions) {
-            const language = detectLanguage(option.title);
-
-            // Apply language filter if specified
-            if (languageFilter && language !== languageFilter) {
-                continue;
-            }
-
+            console.log(`Testing option: ${option.title} (post=${option.dataPost}, nume=${option.dataNume})`);
+            
             const streamUrl = await fetchStreamUrl(
                 option.dataPost,
                 option.dataNume,
             );
+            
             if (streamUrl) {
+                // Detect language from option title
+                const language = detectLanguage(option.title);
+                
+                // Apply language filter if specified
+                if (languageFilter && language !== languageFilter && language !== "unknown") {
+                    console.log(`Skipping stream due to language filter: ${language} !== ${languageFilter}`);
+                    continue;
+                }
+                
                 streams.push({
                     quality: option.title,
                     url: streamUrl,
                     language: language,
                 });
+                
+                console.log(`✓ Added stream: ${option.title} (${language})`);
             }
         }
 
